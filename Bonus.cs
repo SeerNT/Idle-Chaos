@@ -26,7 +26,13 @@ public class Bonus : MonoBehaviour
         PassivePureDmg,
         ActiveMagicImmune,
         IncreaseAutoSpeed,
-        PassiveInfection
+        PassiveInfection,
+        UnlockSkillConvertor,
+        UnlockSkillConvStage1,
+        UnlockSkillConvStage2,
+        UnlockSkillConvStage3,
+        UnlockSkillConvStage4,
+        SkillConversionReduceCost
     }
     public Type bonusType;
     public string bonusValue;
@@ -50,9 +56,52 @@ public class Bonus : MonoBehaviour
     public void GetBonus()
     {
         battle = GameObject.Find("Battle").GetComponent<Battle>();
+        GameObject convertor = GameObject.Find("Skills").transform.Find("SkillConvertor").gameObject;
         player = battle.player;
 
-        if(bonusType == Type.ActiveStun)
+        if(bonusType == Type.UnlockSkillConvertor)
+        {
+            convertor.SetActive(true);
+        }
+        if(bonusType == Type.UnlockSkillConvStage1)
+        {
+            convertor.transform.GetChild(2).gameObject.SetActive(true);
+            convertor.transform.GetChild(2).GetComponent<SkillConversion>().isUnlocked = true;
+        }
+        if (bonusType == Type.UnlockSkillConvStage2)
+        {
+            convertor.transform.GetChild(3).gameObject.SetActive(true);
+            convertor.transform.GetChild(4).gameObject.SetActive(true);
+            convertor.transform.GetChild(3).GetComponent<SkillConversion>().isUnlocked = true;
+            convertor.transform.GetChild(4).GetComponent<SkillConversion>().isUnlocked = true;
+        }
+        if (bonusType == Type.UnlockSkillConvStage3)
+        {
+            convertor.transform.GetChild(5).gameObject.SetActive(true);
+            convertor.transform.GetChild(6).gameObject.SetActive(true);
+            convertor.transform.GetChild(5).GetComponent<SkillConversion>().isUnlocked = true;
+            convertor.transform.GetChild(6).GetComponent<SkillConversion>().isUnlocked = true;
+        }
+        if (bonusType == Type.UnlockSkillConvStage4)
+        {
+            convertor.transform.GetChild(7).gameObject.SetActive(true);
+            convertor.transform.GetChild(8).gameObject.SetActive(true);
+            convertor.transform.GetChild(7).GetComponent<SkillConversion>().isUnlocked = true;
+            convertor.transform.GetChild(8).GetComponent<SkillConversion>().isUnlocked = true;
+        }
+        if (bonusType == Type.SkillConversionReduceCost)
+        {
+            convertor.transform.GetChild(1).GetComponent<SkillConversion>().baseCost = 1;
+            convertor.transform.GetChild(2).GetComponent<SkillConversion>().baseCost = 1;
+            convertor.transform.GetChild(3).GetComponent<SkillConversion>().baseCost = 1;
+            convertor.transform.GetChild(4).GetComponent<SkillConversion>().baseCost = 1;
+            convertor.transform.GetChild(5).GetComponent<SkillConversion>().baseCost = 1;
+            convertor.transform.GetChild(6).GetComponent<SkillConversion>().baseCost = 1;
+            convertor.transform.GetChild(7).GetComponent<SkillConversion>().baseCost = 1;
+            convertor.transform.GetChild(8).GetComponent<SkillConversion>().baseCost = 1;
+        }
+
+        if (bonusType == Type.ActiveStun)
         {
             GameAbility ability;
             abilities.TryGetValue("ActiveStun", out ability);

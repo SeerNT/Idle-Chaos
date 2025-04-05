@@ -84,6 +84,7 @@ public class Enemy : MonoBehaviour
 
     public int bossId = 0;
 
+    public bool holyRegen = false;
     public bool isRegenerating = false;
 
     public Enemy(float mana, float stunChance, float hp, float mp, float pp, float arm, float mgarm, float prc, float lck, float cdmg, float atks, float tf)
@@ -146,7 +147,7 @@ public class Enemy : MonoBehaviour
             isStun = true;
         }
 
-        if (generator.Next(100000) < luck * 1000)
+        if (generator.Next(1000) < luck * 1000)
         {
             damage = damage + (damage * critDmg);
         }
@@ -158,7 +159,15 @@ public class Enemy : MonoBehaviour
 
     public void RegenerateHp()
     {
-        hp = hp + physicPower;
+        if (!holyRegen)
+        {
+            hp = hp + physicPower;
+        }
+        else
+        {
+            hp = hp + Mathf.Floor((float)(hp*0.1));
+        }
+        
         percentHp = 1 - (maxHp - hp) / maxHp;
     }
 

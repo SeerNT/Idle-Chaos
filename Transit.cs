@@ -14,9 +14,11 @@ public class Transit : MonoBehaviour
     public Button gatheringBut;
     public Button reincarnationBut;
     public Button metaBut;
+    public Button seaBut;
 
-    [SerializeField] private GameObject[] windows = new GameObject[9];
-    public bool[] isShown = new bool[9];
+    [SerializeField] private GameObject[] windows = new GameObject[10];
+    [SerializeField] private GameObject collectionSector;
+    public bool[] isShown = new bool[10];
 
     void Start()
     {
@@ -29,11 +31,12 @@ public class Transit : MonoBehaviour
         gatheringBut.onClick.AddListener(delegate { MainChange(6); });
         reincarnationBut.onClick.AddListener(delegate { MainChange(7); });
         metaBut.onClick.AddListener(delegate { MainChange(8); });
+        seaBut.onClick.AddListener(delegate { MainChange(9); });
     }
 
-    void MainChange(int index)
+    public void MainChange(int index)
     {
-        for(int i = 0; i< windows.Length; i++)
+        for(int i = 0; i < windows.Length; i++)
         {
             if(i != index)
             {
@@ -46,6 +49,7 @@ public class Transit : MonoBehaviour
                 isShown[i] = true;
             }
         }
+        collectionSector.transform.localPosition = new Vector3(-100000, 0, 0);
     }
 
     void ChangeWindow()

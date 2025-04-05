@@ -134,6 +134,23 @@ public class Console : MonoBehaviour
 
                 commandOutput = "ADDED " + commandValue + " META";
             }
+            else if (command.Contains("chaosplus"))
+            {
+                string commandValue = PrepareCommand(command);
+
+                battle.player.chaosFactor += float.Parse(commandValue);
+
+                commandOutput = "ADDED " + commandValue + " CHAOS";
+            }
+
+            else if (command.Contains("chaosminus"))
+            {
+                string commandValue = PrepareCommand(command);
+
+                battle.player.chaosFactor -= float.Parse(commandValue);
+
+                commandOutput = "ADDED " + commandValue + " -CHAOS";
+            }
 
             GameManager.UpdateText();
         }

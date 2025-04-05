@@ -25,18 +25,22 @@ public class Technique : MonoBehaviour
     public Button startBut;
     public Button buyBut;
     public Image currencyImg;
+    public Battle battle;
     [Header("Settings")]
-    public int buyCost = 35;
+    public double buyCost;
     public Type techType;
     public float trainStr = 0.1f;
     public int lvl = 0;
     public string title;
+    public bool isUltra = false;
 
     public int gainLvl = 0;
     public int timeLvl = 0;
 
-    public int[] xpIncreases = new int[4];
+    public double[] xpIncreases = new double[4];
     public float[] cooldowns = new float[4];
+
+    private double[] baseXpIncreases = new double[4];
 
     private float fillSpeed;
     private float unfillSpeed;
@@ -47,10 +51,21 @@ public class Technique : MonoBehaviour
     public float progressValue;
 
     private bool isHolding = false;
-    
+
+    private bool doOnce = false;
+
     void Start()
     {
-        if(lvl != 0)
+        if (!doOnce)
+        {
+            doOnce = true;
+            baseXpIncreases[0] = xpIncreases[0];
+            baseXpIncreases[1] = xpIncreases[1];
+            baseXpIncreases[2] = xpIncreases[2];
+            baseXpIncreases[3] = xpIncreases[3];
+        }
+        
+        if (lvl != 0)
         {
             startBut.gameObject.GetComponent<Image>().color = Color.green;
         }
@@ -58,10 +73,10 @@ public class Technique : MonoBehaviour
         {
             startBut.gameObject.GetComponent<Image>().color = Color.magenta;
         }
-        
 
-        titleText.text = title;
-        if(this.isTraining || currentTime == cooldowns[timeLvl])
+
+        titleText.text = title.Replace("|", "\u000A"); ;
+        if (this.isTraining || currentTime == cooldowns[timeLvl])
             timer.text = cooldowns[timeLvl].ToString() + "s";
         costText.text = "Cost:" + NumberConversion.AbbreviateNumber(buyCost);
 
@@ -69,7 +84,7 @@ public class Technique : MonoBehaviour
         TextGenerationSettings generationSettings = costText.GetGenerationSettings(costText.rectTransform.rect.size);
         float width = textGen.GetPreferredWidth(costText.text, generationSettings);
         float height = textGen.GetPreferredHeight(costText.text, generationSettings);
-        costText.GetComponent<RectTransform>().sizeDelta = new Vector2(width, height);
+        //costText.GetComponent<RectTransform>().sizeDelta = new Vector2(width, 31);
 
         if (techType != Type.Passive)
         {
@@ -103,18 +118,46 @@ public class Technique : MonoBehaviour
 
     void Buy()
     {
-        if(GameManager.xp >= buyCost)
+        int num = int.Parse(this.name.Replace("Technique", ""));
+        num = num - 1;
+        if (num > 0)
         {
-            GameManager.xp -= buyCost;
-            GameManager.UpdateText();
-            lvl += 1;
-            buyObject.SetActive(false);
-            if(techType == Type.Passive)
+            Technique previousTech = transform.parent.Find("Technique" + num.ToString()).GetComponent<Technique>();
+
+            if (previousTech.lvl > 0)
             {
-                timeObject.SetActive(true);
-                timer.text = TimeConversion.AbbreviateTime(cooldowns[timeLvl]);
+                if (GameManager.xp >= buyCost)
+                {
+                    GameManager.xp -= buyCost;
+                    GameManager.UpdateText();
+                    lvl += 1;
+                    buyObject.SetActive(false);
+                    if (techType == Type.Passive)
+                    {
+                        timeObject.SetActive(true);
+                        timer.text = TimeConversion.AbbreviateTime(cooldowns[timeLvl]);
+
+                    }
+                    startBut.gameObject.GetComponent<Image>().color = Color.green;
+                }
             }
-            startBut.gameObject.GetComponent<Image>().color = Color.green;
+        }
+        else
+        {
+            if (GameManager.xp >= buyCost)
+            {
+                GameManager.xp -= buyCost;
+                GameManager.UpdateText();
+                lvl += 1;
+                buyObject.SetActive(false);
+                if (techType == Type.Passive)
+                {
+                    timeObject.SetActive(true);
+                    timer.text = TimeConversion.AbbreviateTime(cooldowns[timeLvl]);
+
+                }
+                startBut.gameObject.GetComponent<Image>().color = Color.green;
+            }
         }
     }
 
@@ -125,6 +168,19 @@ public class Technique : MonoBehaviour
         unfillSpeed = 1 / cooldowns[timeLvl];
         UpdateCostText();
         UpdateCostImg();
+
+        if (isUltra)
+        {
+            if (battle.player.chaosFactor <= 0)
+            {
+                gameObject.SetActive(false);
+            }
+            else
+            {
+                xpIncreases[gainLvl] = baseXpIncreases[gainLvl] * (2 - (battle.player.chaosFactor / 95));
+            }
+        }
+
         if (isTraining && progressBar.value < 1)
         {
             if(techType == Type.Spam)
@@ -186,6 +242,7 @@ public class Technique : MonoBehaviour
 
     public void UpdateCostImg()
     {
+        /*
         switch (costText.text.Length)
         {
             case 6:
@@ -218,7 +275,7 @@ public class Technique : MonoBehaviour
             default:
                 currencyImg.gameObject.SetActive(false);
                 break;
-        }
+        }*/
     }
 
     void UpdateCostText()
@@ -244,8 +301,8 @@ public class Technique : MonoBehaviour
             progressValue = progressBar.value;
             StartTraining();
         }
-        GameManager.xp += xpIncreases[gainLvl];
-        Reincarnation.totalEarnXp += xpIncreases[gainLvl];
+        GameManager.xp += Math.Round(xpIncreases[gainLvl], 1);
+        Reincarnation.totalEarnXp += Math.Round(xpIncreases[gainLvl], 1);
         GameManager.UpdateText();
     }
 
@@ -349,7 +406,7 @@ public class Technique : MonoBehaviour
         TextGenerationSettings generationSettings = costText.GetGenerationSettings(costText.rectTransform.rect.size);
         float width = textGen.GetPreferredWidth(costText.text, generationSettings);
         float height = textGen.GetPreferredHeight(costText.text, generationSettings);
-        costText.GetComponent<RectTransform>().sizeDelta = new Vector2(width, height);
+        //costText.GetComponent<RectTransform>().sizeDelta = new Vector2(width, 31);
 
         startBut.gameObject.GetComponent<Image>().color = Color.green;
         costText.text = "Cost:" + NumberConversion.AbbreviateNumber(buyCost);
@@ -436,9 +493,9 @@ public class Technique : MonoBehaviour
         }
     }
 
-    public int SimulateTime(float total)
+    public double SimulateTime(float total)
     {
-        int xp = 0;
+        double xp = 0;
         float left = total;
         if (!this.isTraining && currentTime < cooldowns[timeLvl] && techType == Type.Passive)
         {
@@ -449,19 +506,16 @@ public class Technique : MonoBehaviour
         }
         else if (currentTime < left)
         {
-            double increaseAmount = Math.Floor(left / cooldowns[timeLvl]);
-            float leftSeconds = (float)Math.Round(left - (increaseAmount * cooldowns[timeLvl]), 2);
+            //double increaseAmount = Math.Floor(left / cooldowns[timeLvl]);
+            double increaseAmount = Math.Floor((total + currentTime) / cooldowns[timeLvl]);
+            float leftSeconds = (float)((((total + currentTime) / cooldowns[timeLvl]) - increaseAmount) * cooldowns[timeLvl]);
+            //float leftSeconds = (float)Math.Round(left - (increaseAmount * cooldowns[timeLvl]), 2);
             currentTime = currentTime + leftSeconds;
 
-            double i = increaseAmount;
-            while (i != 0)
-            {
-                i--;
-                GameManager.xp += xpIncreases[gainLvl];
-                Reincarnation.totalEarnXp += xpIncreases[gainLvl];
-                GameManager.UpdateText();
-                xp += xpIncreases[gainLvl];
-            }
+            GameManager.xp += xpIncreases[gainLvl] * increaseAmount;
+            Reincarnation.totalEarnXp += xpIncreases[gainLvl] * increaseAmount;
+            GameManager.UpdateText();
+            xp += xpIncreases[gainLvl] * increaseAmount;
 
             isTraining = true;
             startBut.gameObject.GetComponent<Image>().color = Color.yellow;
