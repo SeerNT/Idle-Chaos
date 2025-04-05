@@ -307,13 +307,12 @@ public class StatUpgrade : MonoBehaviour
         StatUpgradeData data = SaveSystem.LoadStatUpgrade(stat.ToString());
 
         if (data != null)
-        {         
+        {
             this.progressValue = data.progressValue;
 
             this.isUpgrading = data.isUpgrading;
             this.isLocked = data.isLocked;
             this.readyForUpdate = data.readyForUpdate;
-
             this.gainLvl = data.gainLvl;
             this.timeLvl = data.timeLvl;
             this.costLvl = data.costLvl;
@@ -345,5 +344,6 @@ public class StatUpgrade : MonoBehaviour
         progressValue = 0;
         timer.text = TimeConversion.AbbreviateTime(statTimeLimits[timeLvl]);
         startBut.GetComponent<Image>().color = Color.yellow;
+        SaveStatUpgrade();
     }
 }

@@ -26,6 +26,8 @@ public class BattleLogger : MonoBehaviour
     [SerializeField] private string[] playerWeakenReplics;
     [SerializeField] private string[] enemyWeakenReplics;
 
+    private int fieldLimit = 6;
+
     public void OnReceiveDamage(Target target, bool isCrit, string enemyName)
     {
         string RandomSample = "";
@@ -56,11 +58,11 @@ public class BattleLogger : MonoBehaviour
         }
 
         RandomSample = RandomSample.Replace("{enemy}", enemyName);
-        log.text += RandomSample + "!\n";
-        if (Regex.Matches(log.text, "\n").Count > 14)
+        if (Regex.Matches(log.text, "\n").Count > fieldLimit)
         {
             log.text = "";
         }
+        log.text += RandomSample + "!\n";
     }
 
     public void OnDeath(Target target, string enemyName)
@@ -78,11 +80,12 @@ public class BattleLogger : MonoBehaviour
 
         sample = sample.Replace("{enemy}", enemyName);
         
-        log.text += sample + "!\n";
-        if (Regex.Matches(log.text, "\n").Count > 14)
+        
+        if (Regex.Matches(log.text, "\n").Count > fieldLimit)
         {
             log.text = "";
         }
+        log.text += sample + "!\n";
     }
 
     public void OnStun(Target target, string enemyName)
@@ -102,11 +105,12 @@ public class BattleLogger : MonoBehaviour
 
         RandomSample = RandomSample.Replace("{enemy}", enemyName);
         
-        log.text += RandomSample + "!\n";
-        if (Regex.Matches(log.text, "\n").Count > 14)
+        
+        if (Regex.Matches(log.text, "\n").Count > fieldLimit)
         {
             log.text = "";
         }
+        log.text += RandomSample + "!\n";
     }
 
     public void OnSkillsBlock(Target target, string enemyName)
@@ -126,11 +130,12 @@ public class BattleLogger : MonoBehaviour
 
         RandomSample = RandomSample.Replace("{enemy}", enemyName);
         
-        log.text += RandomSample + "!\n";
-        if (Regex.Matches(log.text, "\n").Count > 14)
+        
+        if (Regex.Matches(log.text, "\n").Count > fieldLimit)
         {
             log.text = "";
         }
+        log.text += RandomSample + "!\n";
     }
 
     public void OnWeaken(Target target, string enemyName)
@@ -150,11 +155,12 @@ public class BattleLogger : MonoBehaviour
 
         RandomSample = RandomSample.Replace("{enemy}", enemyName);
 
-        log.text += RandomSample + "!\n";
-        if (Regex.Matches(log.text, "\n").Count > 14)
+        
+        if (Regex.Matches(log.text, "\n").Count > fieldLimit)
         {
             log.text = "";
         }
+        log.text += RandomSample + "!\n";
     }
 
     public void OnUseAbility(string[] phrases)
@@ -164,10 +170,11 @@ public class BattleLogger : MonoBehaviour
         System.Random rand = new System.Random();
         RandomSample = phrases[rand.Next(0, phrases.Length)];
 
-        log.text += RandomSample + "!\n";
-        if (Regex.Matches(log.text, "\n").Count > 14)
+        
+        if (Regex.Matches(log.text, "\n").Count > fieldLimit)
         {
             log.text = "";
         }
+        log.text += RandomSample + "!\n";
     }
 }

@@ -75,9 +75,9 @@ public class TechniqueUpgrade : MonoBehaviour
             {
                 if (!costs[level].Contains("e"))
                 {
-                    if (GameManager.xp >= int.Parse(costs[level]))
+                    if (GameManager.xp >= double.Parse(costs[level]))
                     {
-                        GameManager.xp -= int.Parse(costs[level]);
+                        GameManager.xp -= double.Parse(costs[level]);
                         GameManager.UpdateText();
                         level += 1;
                         transform.Find("LVL" + num.ToString()).Find("BuyBut").gameObject.SetActive(false);
@@ -105,22 +105,21 @@ public class TechniqueUpgrade : MonoBehaviour
 
     void ExecuteUpgrade(Enchance enchance)
     {
+        GameObject findObj = this.transform.parent.parent.gameObject;
         if (enchance == Enchance.Gain)
         {
-            GameObject findObj = this.transform.parent.parent.gameObject;
-
             findObj.GetComponent<Technique>().lvl += 1;
             findObj.GetComponent<Technique>().gainLvl += 1;
         }
         if (enchance == Enchance.Time)
         {
-            GameObject findObj = this.transform.parent.parent.gameObject;
-
             findObj.GetComponent<Technique>().lvl += 1;
             findObj.GetComponent<Technique>().timeLvl += 1;
+            findObj.GetComponent<Technique>().timer.text = TimeConversion.AbbreviateTime(findObj.GetComponent<Technique>().cooldowns[findObj.GetComponent<Technique>().timeLvl]);
         }
         if(enchance == Enchance.Ability)
         {
+            findObj.GetComponent<Technique>().lvl += 1;
             bonus = new Bonus(bonusType, bonusValue);
             bonus.GetBonus();
         }

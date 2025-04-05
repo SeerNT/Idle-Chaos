@@ -130,6 +130,7 @@ public class UpgradeEnchancer : MonoBehaviour
             {
                 findObj.GetComponent<StatUpgrade>().UpdateTime();
             }
+            findObj.GetComponent<StatUpgrade>().UpdateTime();
         }
         if (enchance == Enchance.Cost)
         {
@@ -144,13 +145,21 @@ public class UpgradeEnchancer : MonoBehaviour
 
     public void ActivateOnScreen()
     {
-        this.transform.localPosition = new Vector3(-588.98f, 304,0);
+        if (Application.platform == RuntimePlatform.Android)
+        {
+            this.transform.localPosition = new Vector3(-588.98f, 304, 0);
+        }
+        else
+        {
+            this.transform.localPosition = new Vector3(-588.98f, 304, 0);
+        }
+           
         isActivated = true;
     }
 
     public void DeactivateOnScreen()
     {
-        this.transform.localPosition = new Vector3(-10000, 304, 0);
+        this.transform.localPosition = new Vector3(-10000, 575.1f, 0);
         isActivated = false;
     }
 

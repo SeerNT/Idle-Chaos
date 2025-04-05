@@ -7,13 +7,14 @@ using UnityEngine;
 using UnityEngine.UI;
 using NT_Utils.UI;
 using NT_Utils.Conversion;
+using System.IO;
 
 public class Battle : MonoBehaviour
 {
     public Slider playerHp;
     public Slider enemyHp;
     private Text playerHpText;
-    private Text enemyHpText;
+    public Text enemyHpText;
 
     public Image enemyIcon;
     public Image playerIcon;
@@ -27,13 +28,13 @@ public class Battle : MonoBehaviour
     [Header("Battle Information")]
     public Button startBattle;
 
-    private int enemyN = 1;
+    public int enemyN = 1;
 
     public Player player;
     public Enemy enemy;
 
     public bool isBattle = false;
-    private bool isRegenerate = false;
+    public bool isRegenerate = false;
 
     public List<string> names = new List<string>();
     public List<Sprite> images = new List<Sprite>();
@@ -44,11 +45,11 @@ public class Battle : MonoBehaviour
     public Timer timerPlayer;
     public Timer timerEnemy;
 
-    private Timer hpRegPlayer;
-    private Timer hpRegEnemy;
+    public Timer hpRegPlayer;
+    public Timer hpRegEnemy;
 
-    private Timer manaRegPlayer;
-    private Timer manaRegEnemy;
+    public Timer manaRegPlayer;
+    public Timer manaRegEnemy;
     [Header("Item Drop")]
     public GameObject dropScreen;
 
@@ -71,6 +72,7 @@ public class Battle : MonoBehaviour
     public GameItem[] legendaryItems = new GameItem[100];
     public GameItem[] mythicItems = new GameItem[100];
     public GameItem[] shopItems = new GameItem[100];
+    public GameItem[] chaoticItems = new GameItem[100];
 
     [Header("Stat Texts")]
     public Text ppText;
@@ -95,6 +97,9 @@ public class Battle : MonoBehaviour
     public AbilityManager abilityManager;
     public GameAbility[] abilities;
 
+    public bool playerStunned = false;
+    public bool playerWeakned = false;
+
     public bool isSetup = false;
     private bool battleReturn = false;
 
@@ -116,10 +121,24 @@ public class Battle : MonoBehaviour
     private double prevPlayerHP = -1;
     private double prevEnemyHP = -1;
 
+    [SerializeField] private Sprite[] boss5_Stages = new Sprite[6];
     [SerializeField] private Sprite[] boss3_Stages = new Sprite[3];
     [SerializeField] private string[] boss3_Names = new string[3];
     [SerializeField] private Sprite[] bossInteractionSprites = new Sprite[2];
     [SerializeField] private CutsceneManager cutsceneManager;
+    public GameObject finalBossAdder;
+    [SerializeField] private Animator finalBossAnimator;
+    public GameObject enemyObject;
+
+    [SerializeField] private GameObject seaButObj;
+    [SerializeField] private GameObject seaObj;
+    [SerializeField] private ItemSetManager itemSetManager;
+    [SerializeField] private SkinsManager skinsManager;
+
+    public bool isEnemyStun = false;
+    public bool isPlayerStun = false;
+
+    private bool isSwitchingDeath = false;
 
     void Start() {
         isSetup = false;
@@ -131,17 +150,18 @@ public class Battle : MonoBehaviour
         acceptDropBut = dropScreen.transform.Find("Button").gameObject.GetComponent<Button>();
         acceptDropBut.onClick.AddListener(CloseDropScreen);
 
-        playerHpText = this.transform.GetChild(0).GetChild(1).GetChild(2).GetComponent<Text>();
-        enemyHpText = this.transform.GetChild(1).GetChild(1).GetChild(2).GetComponent<Text>();
+        playerHpText = this.transform.GetChild(1).GetChild(1).GetChild(2).GetComponent<Text>();
+        enemyHpText = this.transform.GetChild(2).GetChild(1).GetChild(2).GetComponent<Text>();
 
-        playerManaText = this.transform.GetChild(0).GetChild(0).GetChild(2).GetComponent<Text>();
-        enemyManaText = this.transform.GetChild(1).GetChild(0).GetChild(2).GetComponent<Text>();
+        playerManaText = this.transform.GetChild(1).GetChild(0).GetChild(2).GetComponent<Text>();
+        enemyManaText = this.transform.GetChild(2).GetChild(0).GetChild(2).GetComponent<Text>();
 
         startBattle.onClick.AddListener(StartBattle);
 
         isEnemySwitched = false;
 
-        if (!SaveSystem.isPlayerLoaded)
+        string path = Application.persistentDataPath + "/player.save";
+        if (!File.Exists(path))
         {
             float playerMana = (float)(10 + (GameManager.magic * 0.1));
             player = new Player(playerMana, 100f, 1f, 1f, 2f, 0.1f, 0f, 0.01f, 0.5f, 100f, 0f);
@@ -173,9 +193,26 @@ public class Battle : MonoBehaviour
         isSetup = true;
     }
 
+    public void InitTimers()
+    {
+        hpRegPlayer = new Timer(InitPlayerHpRegenerate, null, Timeout.Infinite, (int)((player.hpRegSpeed / 200) * 100));
+        hpRegEnemy = new Timer(InitEnemyHpRegenerate, null, Timeout.Infinite, (int)((enemy.hpRegSpeed / 200) * 100));
+        manaRegPlayer = new Timer(InitPlayerManaRegenerate, null, 0, (int)((player.manaRegSpeed / 100) * 1000));
+        manaRegEnemy = new Timer(InitEnemyManaRegenerate, null, 0, (int)((enemy.manaRegSpeed / 100) * 1000));
+
+        timerPlayer = new Timer(InitPlayerBattling, null, Timeout.Infinite, (int)(player.attackSpeed / 100) * 1000);
+        timerEnemy = new Timer(InitEnemyBattling, null, Timeout.Infinite, (int)(enemy.attackSpeed / 100) * 1000);
+    }
+
     public bool IsBattleOn()
     {
         return isBattle;
+    }
+
+    public IEnumerator ReturnAfterEnd()
+    {
+        yield return new WaitForSeconds(0.2f);
+        CutsceneManager.isShowing = false;
     }
 
     void UpdateUI() {
@@ -186,10 +223,22 @@ public class Battle : MonoBehaviour
             playerManaText.text = NumberConversion.AbbreviateNumber(player.mana, NumberConversion.StartAbbrevation.M);
             enemyManaText.text = NumberConversion.AbbreviateNumber(enemy.mana, NumberConversion.StartAbbrevation.M);
 
-            // мгновенный реген когда получается новый кап не должно быть так
+            if(player.chaosFactor >= 1)
+            {
+                chaosFactor.text = "Chaos Factor:" + NumberConversion.AbbreviateNumber(player.chaosFactor, NumberConversion.StartAbbrevation.M);
+                seaObj.SetActive(true);
+                seaButObj.SetActive(true);
+            }
+            else
+            {
+                chaosFactor.text = "???:" + NumberConversion.AbbreviateNumber(player.chaosFactor, NumberConversion.StartAbbrevation.M);
+                seaObj.SetActive(false);
+                seaButObj.SetActive(false);
+            }
+
             if(player.mana != player.maxMana && !player.isRegenerating)
             {
-                manaRegPlayer.Change(0, (int)((player.manaRegSpeed / 100) * 1000));
+                manaRegPlayer.Change((int)((player.manaRegSpeed / 100) * 1000), (int)((player.manaRegSpeed / 100) * 1000));
                 player.isRegenerating = true;
             }
             else if(player.mana >= player.maxMana)
@@ -200,7 +249,7 @@ public class Battle : MonoBehaviour
 
             if (enemy.mana != enemy.maxMana && !enemy.isRegenerating)
             {
-                manaRegEnemy.Change(0, (int)((enemy.manaRegSpeed / 100) * 1000));
+                manaRegEnemy.Change((int)((enemy.manaRegSpeed / 100) * 1000), (int)((enemy.manaRegSpeed / 100) * 1000));
             }
             else if (enemy.mana >= enemy.maxMana)
             {
@@ -231,7 +280,7 @@ public class Battle : MonoBehaviour
         }
     }
 
-    void SwitchEnemy(int id)
+    public void SwitchEnemy(int id)
     {
         if (enemyN == 1 && !isEnemySwitched)
         {
@@ -256,6 +305,7 @@ public class Battle : MonoBehaviour
         }
         if (enemyN == 4 && !isEnemySwitched)
         {
+            skinsManager.AddSkin(1, names[enemyN - 1]);
             enemy = new Enemy(30f, 0f, 47280f, 0f, 300f, 10f, 10f, 0.3f, 0.34f, 0.5f, 105f, 0f);
             isEnemySwitched = true;
             PrepareBattle(enemyN);
@@ -277,6 +327,7 @@ public class Battle : MonoBehaviour
         }
         if (enemyN == 7 && !isEnemySwitched)
         {
+            skinsManager.AddSkin(2, names[enemyN - 1]);
             enemy = new Enemy(120f, 15f, 680000f, 0f, 12900F, 85f, 40f, 0.4f, 0.44f, 0.7f, 150f, 0f);
             enemy.stunDur = 2f;
             isEnemySwitched = true;
@@ -293,14 +344,15 @@ public class Battle : MonoBehaviour
         }
         if (enemyN == 9 && !isEnemySwitched)
         {
-            enemy = new Enemy(999f, 0f, 999999f, 0f, 1050F, 45f, 40f, 0.7f, 0.14f, 1.7f, 80f, 0f);
+            enemy = new Enemy(999f, 0f, 999999f, 0f, 1050F, 65f, 40f, 0.7f, 0.24f, 1.7f, 80f, 0f);
             isEnemySwitched = true;
             PrepareBattle(enemyN);
             UpdateUI();
         }
         if (enemyN == 10 && !isEnemySwitched)
         {
-            enemy = new Enemy(500f, 0f, 2500000f, 0f, 20050F, 40f, 40f, 0.15f, 0.14f, 1.0f, 110f, 0f);
+            skinsManager.AddSkin(3, names[enemyN - 1]);
+            enemy = new Enemy(500f, 0f, 2500000f, 0f, 20050F, 40f, 40f, 0.15f, 0.34f, 1.0f, 110f, 0f);
             isEnemySwitched = true;
             PrepareBattle(enemyN);
             UpdateUI();
@@ -321,6 +373,7 @@ public class Battle : MonoBehaviour
         }
         if (enemyN == 13 && !isEnemySwitched)
         {
+            skinsManager.AddSkin(4, names[enemyN - 1]);
             enemy = new Enemy(10f, 0f, 9500000f, 0f, 500000F, 40f, 50f, 0.25f, 0.24f, 1.0f, 90f, 0f);
             isEnemySwitched = true;
             PrepareBattle(enemyN);
@@ -342,6 +395,7 @@ public class Battle : MonoBehaviour
         }
         if (enemyN == 16 && !isEnemySwitched)
         {
+            skinsManager.AddSkin(5, names[enemyN - 1]);
             enemy = new Enemy(150f, 0f, 60000000f, 1500000f, 1000000F, 25f, 60f, 0.1f, 0.4f, 1.2f, 110f, 0f);
             isEnemySwitched = true;
             PrepareBattle(enemyN);
@@ -361,6 +415,113 @@ public class Battle : MonoBehaviour
             PrepareBossBattle(enemy.bossId);
             UpdateUI();
         }
+        if (enemyN == 19 && !isEnemySwitched)
+        {
+            skinsManager.AddSkin(6, names[enemyN - 1]);
+            enemy = new Enemy(250f, 0f, 800000000f, 0f, 1000000F, 35f, 35f, 0.5f, 0.4f, 1.0f, 80f, 0f);
+            isEnemySwitched = true;
+            PrepareBattle(enemyN);
+            UpdateUI();
+        }
+        if (enemyN == 20 && !isEnemySwitched)
+        {
+            enemy = new Enemy(200f, 0f, 6400000000f, 0f, 2400000F, 35f, 55f, 0.5f, 0.7f, 5.0f, 100f, 0f);
+            isEnemySwitched = true;
+            PrepareBattle(enemyN);
+            UpdateUI();
+        }
+        if (enemyN == 21 && !isEnemySwitched)
+        {
+            enemy = new Enemy(150f, 0f, 25600000000f, 0f, 5000000F, 35f, 55f, 0.6f, 0.6f, 2.0f, 90f, 0f);
+            isEnemySwitched = true;
+            PrepareBattle(enemyN);
+            UpdateUI();
+        }
+        if (enemyN == 22 && !isEnemySwitched)
+        {
+            enemy = new Enemy(25f, 0f, 102400000000f, 0f, 500000F, 85f, 55f, 0.4f, 0.1f, 1.0f, 1f, 0f);
+            isEnemySwitched = true;
+            PrepareBattle(enemyN);
+            UpdateUI();
+        }
+        if (enemyN == 23 && !isEnemySwitched)
+        {
+            skinsManager.AddSkin(7, names[enemyN - 1]);
+            enemy = new Enemy(10f, 0f, 409600000000f, 0f, 2000000F, 95f, 55f, 0.3f, 0.1f, 1.0f, 5f, 0f);
+            isEnemySwitched = true;
+            PrepareBattle(enemyN);
+            UpdateUI();
+        }
+        if (enemyN == 24 && !isEnemySwitched)
+        {
+            enemy = new Enemy(4, 25f, 10000000f, 10000000000000f, 10000000F, 10000000F, 50f, 50f, 0.35f, 0.24f, 2.0f, 80f, 0f);
+            isEnemySwitched = true;
+            PrepareBossBattle(enemy.bossId);
+            UpdateUI();
+        }
+        
+        if (enemyN == 25 && !isEnemySwitched)
+        {
+            enemy = new Enemy(1200f, 10f, 780000000000000f, 0f, 18000000F, 85f, 55f, 0.3f, 0.1f, 1.0f, 55f, 0f);
+            enemy.hpRegSpeed = 500;
+            isEnemySwitched = true;
+            PrepareBattle(enemyN);
+            UpdateUI();
+        }
+        if (enemyN == 26 && !isEnemySwitched)
+        {
+            skinsManager.AddSkin(8, names[enemyN - 1]);
+            enemy = new Enemy(2500f, 0f, 9600000000000000f, 0f, 512000000F, 45f, 75f, 0.3f, 0.2f, 1.5f, 75f, 0f);
+            enemy.hpRegSpeed = 450;
+            isEnemySwitched = true;
+            PrepareBattle(enemyN);
+            UpdateUI();
+        }
+        if (enemyN == 27 && !isEnemySwitched)
+        {
+            enemy = new Enemy(4100f, 0f, 12000000000000000f, 0f, 812000000F, 45f, 45f, 0.4f, 0.1f, 1.0f, 25f, 0f);
+            enemy.hpRegSpeed = 400;
+            isEnemySwitched = true;
+            PrepareBattle(enemyN);
+            UpdateUI();
+        }
+        if (enemyN == 28 && !isEnemySwitched)
+        {
+            skinsManager.AddSkin(9, names[enemyN - 1]);
+            enemy = new Enemy(5000f, 0f, 5650000000000000000f, 0f, 9000000000F, 75f, 45f, 0.4f, 0.4f, 4.0f, 145f, 0f);
+            enemy.hpRegSpeed = 200;
+            isEnemySwitched = true;
+            PrepareBattle(enemyN);
+            UpdateUI();
+        }
+        if (enemyN == 29 && !isEnemySwitched)
+        {
+            enemy = new Enemy(8500f, 35f, 9990000000000000000f, 0f, 100000000000F, 35f, 45f, 0.6f, 0.4f, 1.0f, 155f, 0f);
+            enemy.hpRegSpeed = 200;
+            isEnemySwitched = true;
+            PrepareBattle(enemyN);
+            UpdateUI();
+        }
+        if (enemyN == 30 && !isEnemySwitched)
+        {
+            skinsManager.AddSkin(10, names[enemyN - 1]);
+            enemy = new Enemy(5, 95, 10000f, 1000000000000000000000f, 1000000000000F, 5000000000000F, 95f, 95f, 0.9f, 0.8f, 1.2f, 50f, 0f);
+            enemy.hpRegSpeed = 200;
+            enemy.holyRegen = true;
+            isEnemySwitched = true;
+            PrepareBossBattle(enemy.bossId);
+            UpdateUI();
+        }
+        if (enemyN == 31 && !isEnemySwitched)
+        {
+            skinsManager.AddSkin(11, names[enemyN - 1]);
+            enemy = new Enemy(6, 95, 100000f, 1000000000000000000000000f, 1000000000000000F, 5000000000000000F, 95f, 95f, 0.9f, 0.9f, 1.5f, 30f, 0f);
+            enemy.hpRegSpeed = 200;
+            enemy.holyRegen = true;
+            isEnemySwitched = true;
+            PrepareBossBattle(enemy.bossId);
+            UpdateUI();
+        }
     }
 
     public void PrepareBattle(int enemyN)
@@ -373,6 +534,10 @@ public class Battle : MonoBehaviour
         if (enemyN == 16)
         {
             abilityManager.AddAbilityToEnemyHotbar(enemyAbilities[1], 1);
+        }
+        if (enemyN == 23)
+        {
+            abilityManager.AddAbilityToEnemyHotbar(enemyAbilities[2], 1);
         }
     }
 
@@ -395,6 +560,22 @@ public class Battle : MonoBehaviour
             abilityManager.AddAbilityToEnemyHotbar(bossAbilities[4], 2);
             bossInteractions.GetChild(0).GetComponent<Image>().sprite = bossInteractionSprites[1];
         }
+        if (id == 4)
+        {
+            abilityManager.AddAbilityToEnemyHotbar(bossAbilities[5], 1);
+            abilityManager.AddAbilityToEnemyHotbar(bossAbilities[6], 2);
+        }
+        if (id == 5)
+        {
+            abilityManager.AddAbilityToEnemyHotbar(bossAbilities[7], 1);
+            abilityManager.AddAbilityToEnemyHotbar(bossAbilities[8], 2);
+        }
+        if (id == 6)
+        {
+            finalBossAdder.SetActive(true);
+            enemyObject.GetComponent<Animator>().enabled = true;
+            bossTreat.GetComponent<Text>().text = "FINAL BOSS";
+        }
     }
 
     void UpdateStats() {
@@ -404,11 +585,20 @@ public class Battle : MonoBehaviour
         magArmText.text = "Magic Armor:" + NumberConversion.AbbreviateNumber(player.magicArmor);
 
         prcText.text = "Pierce:" + player.pierce;
-        lckText.text = "Luck:" + player.luck;
-        critText.text = "Crit Damage:" + (100 + (player.critDmg * 100)).ToString() + "%";
+        lckText.text = "Luck:" + player.luck; 
+        critText.text = "Crit Damage:" + NumberConversion.AbbreviateNumber(100 + (player.critDmg * 100)) + "%";
         asText.text = "Attack Speed:" + player.attackSpeed;
-        mxhpText.text = "Max Hp:" + player.maxHp;
-        chaosFactor.text = "???:" + player.chaosFactor;
+        mxhpText.text = "Max Hp:" + NumberConversion.AbbreviateNumber(player.maxHp);
+
+        if (player.chaosFactor >= 1)
+        {
+            chaosFactor.text = "Chaos Factor:" + NumberConversion.AbbreviateNumber(player.chaosFactor, NumberConversion.StartAbbrevation.M);
+        }
+        else
+        {
+            chaosFactor.text = "???:" + player.chaosFactor;
+        }
+
         if (player.armor >= 100)
         {
             armText.color = Color.red;
@@ -454,6 +644,16 @@ public class Battle : MonoBehaviour
     void Update() {
         if (isSetup && !CutsceneManager.isShowing)
         {
+            if (isEnemyStun)
+            {
+                StunEnemy(player.stunDur*2000);
+                isEnemyStun = false;
+            }
+            if (isPlayerStun)
+            {
+                StunPlayer(enemy.stunDur * 2000);
+                isPlayerStun = false;
+            }
             UpdateUI();
             UpdateStats();
             if (SaveSystem.isBattleLoaded && !battleReturn)
@@ -465,7 +665,7 @@ public class Battle : MonoBehaviour
             player.percentMana = 1 - ((player.maxMana - player.mana) / player.maxMana);
 
             // Catch Player getting dmg from Enemy
-            if(prevPlayerHP != -1)
+            if (prevPlayerHP != -1)
             {
                 if(player.hp <= player.maxHp)
                 {
@@ -500,10 +700,18 @@ public class Battle : MonoBehaviour
                     prevEnemyHP = enemy.hp;
             }
 
-            if (!isBattle && !isRegenerate)
+            if (!isBattle && !isRegenerate && (player.hp >= player.maxHp) && (enemy.hp >= enemy.maxHp))
             {
                 player.hp = player.maxHp;
                 enemy.hp = enemy.maxHp;
+                hpRegPlayer.Change(Timeout.Infinite, Timeout.Infinite);
+                hpRegEnemy.Change(Timeout.Infinite, Timeout.Infinite);
+            }
+
+            if (!isBattle && !isRegenerate && (player.hp < player.maxHp) && (enemy.hp >= enemy.maxHp))
+            {
+                hpRegPlayer = new Timer(InitPlayerHpRegenerate, null, (int)((player.hpRegSpeed / 200) * 100), (int)((player.hpRegSpeed / 200) * 100));
+                isRegenerate = true;
             }
 
             if(enemy.bossId == 3)
@@ -529,16 +737,93 @@ public class Battle : MonoBehaviour
                 }
             }
 
-            if (enemy.hp <= 0)
+            if (enemy.bossId == 6)
             {
-                if(enemy.bossId != 3)
+                enemyHp.transform.GetChild(1).GetChild(0).GetComponent<Image>().color = new Color32(229, 151, 6, 255);
+            }
+
+            if (enemy.bossId == 5)
+            {
+                enemyHp.transform.GetChild(1).GetChild(0).GetComponent<Image>().color = new Color32(226, 223, 40, 255);
+                if (enemy.hp >= enemy.maxHp)
                 {
-                    OnDeath();
-                    StartBattle();
+                    enemyIcon.sprite = boss5_Stages[0];
+                }
+                else if (enemy.hp < enemy.maxHp && enemy.hp > ((enemy.maxHp * 5) / 6))
+                {
+                    enemyIcon.sprite = boss5_Stages[1];
+                }
+                else if (enemy.hp <= ((enemy.maxHp * 5) / 6) && enemy.hp > ((enemy.maxHp * 4) / 6))
+                {
+                    enemyIcon.sprite = boss5_Stages[2];
+                }
+                else if (enemy.hp <= ((enemy.maxHp * 4) / 6) && enemy.hp > ((enemy.maxHp * 3) / 6))
+                {
+                    enemyIcon.sprite = boss5_Stages[3];
+                }
+                else if (enemy.hp <= ((enemy.maxHp * 3) / 6) && enemy.hp > ((enemy.maxHp * 2) / 6))
+                {
+                    enemyIcon.sprite = boss5_Stages[4];
+                }
+                else if (enemy.hp <= (enemy.maxHp / 3))
+                {
+                    enemyIcon.sprite = boss5_Stages[5];
+                }
+            }
+
+            if (enemy.hp <= 0 && !isSwitchingDeath)
+            {
+                if(enemy.bossId != 3 && enemy.bossId != 4 && enemy.bossId != 5 && enemy.bossId != 6)
+                {
+                    StartOnDeath();
+                }
+                else if(enemy.bossId == 4)
+                {
+                    if(player.chaosFactor < 4)
+                        cutsceneManager.ShowCutscene(2);
+                    else
+                    {
+                        StartOnDeath();
+                    }
+                }
+                else if (enemy.bossId == 5)
+                {
+                    if (player.chaosFactor < 6)
+                        cutsceneManager.ShowCutscene(3);
+                    else
+                    {
+                        StartOnDeath();
+                    }
+                }
+                else if (enemy.bossId == 6 && !CutsceneManager.isShowing)
+                {
+                    if(player.chaosFactor >= 12)
+                    {
+                        cutsceneManager.ShowEnding(3);
+                    }
+                    else if (itemSetManager.HasHolySet())
+                    {
+                        cutsceneManager.ShowEnding(2);
+                    }
+                    else
+                    {
+                        timerPlayer.Change(Timeout.Infinite, Timeout.Infinite);
+                        timerEnemy.Change(Timeout.Infinite, Timeout.Infinite);
+                        hpRegPlayer.Change(Timeout.Infinite, Timeout.Infinite);
+                        hpRegEnemy.Change(Timeout.Infinite, Timeout.Infinite);
+                        cutsceneManager.ShowEnding(1);
+                        enemy.hp = 0.001f;
+                    }
+                    
                 }
                 else
                 {
-                    cutsceneManager.ShowCutscene(1);
+                    if(player.chaosFactor < 1)
+                        cutsceneManager.ShowCutscene(1);
+                    else
+                    {
+                        StartOnDeath();
+                    }
                 }
             }
             
@@ -553,12 +838,13 @@ public class Battle : MonoBehaviour
                 {
                     player.negativeEffects[0].StopEffect();
                 }
+
                 StartBattle();
+
                 ResetEnemyAbilities();
-                //hpRegPlayer.Change(0, (int)((player.hpRegSpeed / 200) * 1000));
-                //hpRegEnemy.Change(0, (int)((enemy.hpRegSpeed / 200) * 1000));
                 isRegenerate = true;
             }
+
             if (isRegenerate && player.hp >= player.maxHp)
             {
                 player.hp = player.maxHp;
@@ -581,13 +867,37 @@ public class Battle : MonoBehaviour
             double curTime = Time.realtimeSinceStartup;
             if (Math.Abs(curTime - lastStartBattleTime) < 1f && !isBattle)
             {
-                StartCoroutine(Utilities.DisableButtonForSecs(startBattle, 1f));
+                //StartCoroutine(Utilities.DisableButtonForSecs(startBattle, 1f));
             }
         }
         
     }
 
-    void OnDeath() {
+    public void StartOnDeath()
+    {
+        if (!isSwitchingDeath)
+        {
+            isSwitchingDeath = true;
+            timerPlayer.Change(Timeout.Infinite, Timeout.Infinite);
+            timerEnemy.Change(Timeout.Infinite, Timeout.Infinite);
+            StartCoroutine("OnDeath");
+        }
+    }
+
+    public IEnumerator OnDeath() {
+        yield return new WaitForSeconds(0.05f);
+        enemyN++;
+        SwitchEnemy(enemyN);
+
+        hpRegPlayer.Change(0, (int)((player.hpRegSpeed / 200) * 100));
+        hpRegEnemy.Change(0, (int)((enemy.hpRegSpeed / 200) * 100));
+        isRegenerate = true;
+
+        isBattle = false;
+        StartCoroutine(Utilities.DisableButtonForSecs(startBattle, 1f));
+        timerPlayer.Change(Timeout.Infinite, Timeout.Infinite);
+        timerEnemy.Change(Timeout.Infinite, Timeout.Infinite);
+
         ReturnPlayer();
         RemoveEnemyAbilities();
         ResetEnemyAbilities();
@@ -599,9 +909,10 @@ public class Battle : MonoBehaviour
         enemyIconColor = new Color32(255, 255, 255, 255);
 
         itemDrop = GameItem.GetRandomItem(this);
-        if (itemDrop != null) {
+        if (itemDrop != null)
+        {
             string[] arrNames = names.ToArray();
-            titleDrop.text = arrNames[enemyN - 1] + " DROPPED ITEM";
+            titleDrop.text = arrNames[enemyN - 2] + " DROPPED ITEM";
             rarityDrop.text = itemDrop.rarity.ToString();
             itemNameDrop.text = itemDrop.displayName;
             itemDescDrop.text = itemDrop.description;
@@ -610,29 +921,31 @@ public class Battle : MonoBehaviour
             inventory.AddItem(itemDrop);
         }
 
-        player.xp += xpRewards[enemyN-1];
-        GameManager.xp += xpRewards[enemyN - 1];
-        if(TalantManager.bloodUnlocked)
+        player.xp += xpRewards[enemyN - 2];
+        GameManager.xp += xpRewards[enemyN - 2];
+        Reincarnation.totalEarnXp += xpRewards[enemyN - 2];
+
+        if (TalantManager.bloodUnlocked)
             GameManager.blood += (1 + Mathf.Floor(enemyN / 10));
         GameManager.UpdateText();
-        if(player.xp >= player.xpCap)
+        if (player.xp >= player.xpCap)
         {
             player.xp = player.xp - player.xpCap;
             player.lvl++;
-            skillManager.skillpoints += player.lvl * 2;
+            skillManager.skillpoints += player.lvl * 3;
             talantManager.talantPoints += 2;
             talantManager.OnPointsChange();
             skillManager.OnPointsChange();
             player.xpCap = (int)(player.xpCap + (player.xpCap * 0.8));
-            if(player.lvl % 5 == 0)
+            if (player.lvl % 5 == 0)
             {
                 Tuple<StatUpgrade.Stats, int> stat = player.GetRandomStat();
                 player.IncreaseStat(stat.Item1, stat.Item2);
             }
         }
-        enemyN++;
+
         isEnemySwitched = false;
-        
+        isSwitchingDeath = false;
     }
 
     public void Reset()
@@ -648,6 +961,8 @@ public class Battle : MonoBehaviour
         }
         playerIconColor = new Color32(255, 255, 255, 255);
         enemyIconColor = new Color32(255, 255, 255, 255);
+        hpRegPlayer.Change(Timeout.Infinite, Timeout.Infinite);
+        hpRegEnemy.Change(Timeout.Infinite, Timeout.Infinite);
         if (cooldownTimer != null)
             cooldownTimer.Change(Timeout.Infinite, Timeout.Infinite);
     }
@@ -774,6 +1089,7 @@ public class Battle : MonoBehaviour
                 if (!player.negativeEffects[0].isEffected)
                 {
                     timerPlayer.Change(0, (int)((player.attackSpeed / 100) * 1000));
+                    playerStunned = false;
                 }
                 else
                 {
@@ -783,18 +1099,21 @@ public class Battle : MonoBehaviour
             else
             {
                 timerPlayer.Change(0, (int)((player.attackSpeed / 100) * 1000));
+                playerStunned = false;
             }
             
         }
     }
 
-    void StartBattle() {
+    public void StartBattle() {
         if (!isBattle)
         {
             isBattle = true;
             lastStartBattleTime = Time.realtimeSinceStartup;
-            timerPlayer.Change(190, (int)((player.attackSpeed / 100) * 1000));
-            timerEnemy.Change(190, (int)((enemy.attackSpeed / 100) * 1000));
+            if(!playerStunned)
+                timerPlayer.Change(190, (int)((player.attackSpeed / 100) * 1000));
+            if(!isEnemyStun)
+                timerEnemy.Change(190, (int)((enemy.attackSpeed / 100) * 1000));
             hpRegPlayer.Change(Timeout.Infinite, Timeout.Infinite);
             hpRegEnemy.Change(Timeout.Infinite, Timeout.Infinite);
             isRegenerate = false;
@@ -802,6 +1121,7 @@ public class Battle : MonoBehaviour
         }
         else {
             isBattle = false;
+            StartCoroutine(Utilities.DisableButtonForSecs(startBattle, 1f));
             timerPlayer.Change(Timeout.Infinite, Timeout.Infinite);
             timerEnemy.Change(Timeout.Infinite, Timeout.Infinite);
             hpRegPlayer.Change(0, (int)((player.hpRegSpeed / 200) * 100));
@@ -810,7 +1130,7 @@ public class Battle : MonoBehaviour
         }
     }
 
-    void ReturnBattleState()
+    public void ReturnBattleState()
     {
         if (isBattle)
         {
@@ -904,6 +1224,7 @@ public class Battle : MonoBehaviour
 
     void InitPlayerManaRegenerate(object o)
     {
+        
         player.RegenerateMana();
     }
 
@@ -913,28 +1234,28 @@ public class Battle : MonoBehaviour
     }
 
     void InitPlayerBattling(object o) {
-        bool isStun = false;
-        isStun = player.Attack(enemy);
-        if (isStun && !enemy.negativeEffects[1].isEffected)
-        {
-            StunEnemy(player.stunDur);
-        }
+        isEnemyStun = player.Attack(enemy);
     }
 
     void InitEnemyBattling(object o)
     {
-        bool isStun = false;
-        isStun = enemy.Attack(player);
-        if (isStun && !player.negativeEffects[0].isEffected)
-        {
-            StunPlayer(enemy.stunDur);
-        }
+        isPlayerStun = enemy.Attack(player);
     }
 
     public void StunEnemy(float ms)
     {
+        NegativeEffect stunEffect = null;
+        foreach (NegativeEffect effect in effectsObject.GetComponents<NegativeEffect>())
+        {
+            if(effect.effectId == 1)
+            {
+                stunEffect = effect;
+                break;
+            }
+        }
         logger.OnStun(BattleLogger.Target.Enemy, enemyName.text);
-        NegativeEffect stunEffect = effectsObject.AddComponent<NegativeEffect>();
+        if(stunEffect == null)
+            stunEffect = effectsObject.AddComponent<NegativeEffect>();
         stunEffect.effectId = 1;
         enemy.negativeEffects[1] = stunEffect;
         stunEffect.isEffected = true;
@@ -1022,7 +1343,14 @@ public class Battle : MonoBehaviour
         victim.hp -= damage;
     }
 
-    void ReturnPlayer()
+    public void DealMagicDmgProcent(Player caster, Enemy victim, float value)
+    {
+        float damage = caster.magicPower * (value/100);
+        damage = damage - (damage * (victim.magicArmor / 100));
+        victim.hp -= damage;
+    }
+
+    public void ReturnPlayer()
     {
         bossInteractions.gameObject.SetActive(false);
         enemyInteractions.gameObject.SetActive(false);
@@ -1079,6 +1407,7 @@ public class Battle : MonoBehaviour
             enemyN = data.enemyN;
             isBattle = data.isBattle;
             isRegenerate = data.isRegenerate;
+            isRegenerate = false;
         }
     }
 
@@ -1110,6 +1439,8 @@ public class Battle : MonoBehaviour
             player.critDmg = data.critDmg;
             player.attackSpeed = data.attackSpeed;
             player.chaosFactor = data.chaosFactor;
+
+            player.vampirismChance = data.vampChance;
 
             player.lvl = data.lvl;
             player.xp = data.xp;
@@ -1180,6 +1511,39 @@ public class Battle : MonoBehaviour
 
             enemy.stunChance = data.stunChance;
             enemy.stunDur = data.stunDuration;
+            if(enemyN == 6)
+            {
+                bossTreat.SetActive(true);
+                enemy.bossId = 1;
+            }
+            if (enemyN == 12)
+            {
+                bossTreat.SetActive(true);
+                enemy.bossId = 2;
+            }
+            if (enemyN == 18)
+            {
+                bossTreat.SetActive(true);
+                enemy.bossId = 3;
+            }
+            if (enemyN == 24)
+            {
+                bossTreat.SetActive(true);
+                enemy.bossId = 4;
+            }
+            if (enemyN == 30)
+            {
+                bossTreat.SetActive(true);
+                enemy.bossId = 5;
+            }
+            if (enemyN == 31)
+            {
+                bossTreat.SetActive(true);
+                enemy.bossId = 6;
+                finalBossAdder.SetActive(true);
+                enemyObject.GetComponent<Animator>().enabled = true;
+                bossTreat.GetComponent<Text>().text = "FINAL BOSS";
+            }
             for (int i = 0; i < NegativeEffect.effectIds.Count; i++)
             {
                 NegativeEffectData data2 = SaveSystem.LoadEnemyNegativeEffect(i);
